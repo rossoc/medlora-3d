@@ -1,9 +1,3 @@
-"""Project-wide constants.
-
-Keep this file minimal: simple, stable values used across the package. Prefer
-reading an environment variable for user-specific paths (see MEDLORA_SSL_PATH).
-"""
-
 from __future__ import annotations
 
 import os
