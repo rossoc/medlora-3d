@@ -1,3 +1,5 @@
+# medlora/data.py
+from __future__ import annotations
 import json
 from pathlib import Path
 import numpy as np
@@ -19,11 +21,11 @@ from monai.transforms import (
 from .constants import CT_TASKS, DEFAULT_ROI, DEFAULT_VAL_FRAC
 
 
-def is_ct(task):
+def is_ct(task: str) -> bool:
     return task in CT_TASKS
 
 
-def make_transforms(task, roi=DEFAULT_ROI, aug=True):
+def make_transforms(task: str, roi=DEFAULT_ROI, aug=True):
     base = [
         LoadImaged(keys=["image", "label"]),
         EnsureChannelFirstd(keys=["image", "label"]),
@@ -92,18 +94,16 @@ def take_fraction(items, frac_percent, seed):
         return items
     n = max(1, int(len(items) * (frac_percent / 100.0)))
     rng = np.random.default_rng(seed)
-    perm = rng.permutation(len(items))[:n]
-    return [items[i] for i in perm]
+    keep = rng.permutation(len(items))[:n]
+    return [items[i] for i in keep]
 
 
 def build_loaders(
     data_dir: Path, task: str, fraction: int, seed: int, batch_size=2, num_workers=2
 ):
     all_items = load_decathlon_list(data_dir, task, download=True)
-    # fixed val split
-    train_pool, val_items = train_val_split(
-        all_items, DEFAULT_VAL_FRAC, seed=0
-    )  # seed=0 to keep "test" fixed across runs
+    # fixed val split (seed=0) to keep "test" constant across runs; seed for fraction selection
+    train_pool, val_items = train_val_split(all_items, DEFAULT_VAL_FRAC, seed=0)
     train_items = take_fraction(train_pool, fraction, seed=seed)
 
     train_tf = make_transforms(task, aug=True)
@@ -111,28 +111,27 @@ def build_loaders(
 
     train_ds = Dataset(train_items, transform=train_tf)
     val_ds = Dataset(val_items, transform=eval_tf)
-    # train-eval (no aug) to compute generalization gap
     train_eval_ds = Dataset(train_items, transform=eval_tf)
 
+    pin = torch.cuda.is_available()
     train_loader = DataLoader(
         train_ds,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin,
     )
     val_loader = DataLoader(
-        val_ds, batch_size=1, shuffle=False, num_workers=num_workers, pin_memory=True
+        val_ds, batch_size=1, shuffle=False, num_workers=num_workers, pin_memory=pin
     )
     train_eval_loader = DataLoader(
         train_eval_ds,
         batch_size=1,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin,
     )
 
-    # Save split for reproducibility
     return (
         train_loader,
         val_loader,

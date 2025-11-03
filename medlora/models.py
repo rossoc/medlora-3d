@@ -1,5 +1,8 @@
-import re, torch, os
+# medlora/models.py
+from __future__ import annotations
+import re
 from pathlib import Path
+import torch
 from monai.apps import download_url
 from monai.networks.nets import SwinUNETR, UNETR
 from .constants import SSL_URL, SSL_PATH
@@ -66,13 +69,19 @@ def ensure_ssl(path=SSL_PATH, url=SSL_URL):
 
 @torch.no_grad()
 def load_ct_ssl_encoder(model: SwinUNETR, path=SSL_PATH):
+    """
+    Load public CT-SSL encoder weights into Swin-UNETR.
+    Handles older key layouts: prefixes and layersX.a.b -> layersX.a.
+    Returns (loaded_tensors_count, total_encoder_tensors).
+    """
     ensure_ssl(path)
     blob = torch.load(path, map_location="cpu")
     for k in ("state_dict", "model", "weights", "params", "net"):
         if isinstance(blob, dict) and k in blob and isinstance(blob[k], dict):
             blob = blob[k]
             break
-    enc_sd = model.swinViT.state_dict()  # RELATIVE keys (no prefix)
+
+    enc_sd = model.swinViT.state_dict()  # relative keys
 
     def rel_map(k: str) -> str:
         for p in (
@@ -90,14 +99,16 @@ def load_ct_ssl_encoder(model: SwinUNETR, path=SSL_PATH):
         return k
 
     to_load = {}
-    for ck, cv in blob.items():
+    for ck, cv in blob.items() if isinstance(blob, dict) else []:
         if not isinstance(cv, torch.Tensor):
             continue
         rel = rel_map(ck)
         if rel in enc_sd and enc_sd[rel].shape == cv.shape:
             to_load[rel] = cv
+
     if to_load:
         enc_new = enc_sd.copy()
         enc_new.update(to_load)
         model.swinViT.load_state_dict(enc_new, strict=False)
+
     return len(to_load), len(enc_sd)

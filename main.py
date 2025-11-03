@@ -1,6 +1,9 @@
-import argparse, time
+# main.py
+from __future__ import annotations
+import argparse, time, json
 from pathlib import Path
-import torch, json
+import torch
+
 from medlora.constants import DEFAULT_ROI, MSD_TASKS
 from medlora.utils import (
     set_seed,
@@ -30,14 +33,17 @@ def parse_args():
     p.add_argument(
         "--early-stopping", type=lambda x: str(x).lower() == "true", default=True
     )
-    p.add_argument("--patience", type=int, default=10)
-    p.add_argument("--min-epochs", type=int, default=30)
+    p.add_argument("--patience", type=int, default=5)
+    p.add_argument("--min-epochs", type=int, default=10)
+
+    p.add_argument("--batch-size", type=int, default=2)
+    p.add_argument("--num-workers", type=int, default=2)
 
     p.add_argument("--data-dir", type=Path, default=Path("/content/data"))
     p.add_argument("--runs-dir", type=Path, default=Path("runs"))
     p.add_argument("--splits-dir", type=Path, default=Path("splits"))
 
-    # method-specific defaults (overrideable)
+    # method-specific knobs
     p.add_argument("--lr-fft", type=float, default=1e-4)
     p.add_argument("--wd-fft", type=float, default=1e-4)
     p.add_argument("--lr-lora", type=float, default=5e-4)
@@ -54,13 +60,11 @@ def run():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # --- IO & dirs ---
-    # ensure data, runs, splits directories exist
     args.data_dir = args.data_dir.expanduser()
     ensure_dir(args.data_dir)
     ensure_dir(args.runs_dir)
     ensure_dir(args.splits_dir)
 
-    # deterministic experiment folder
     exp_dir = (
         args.runs_dir
         / args.dataset
@@ -71,15 +75,21 @@ def run():
     )
     ensure_dir(exp_dir)
 
-    # --- loaders + save split json ---
+    # --- loaders & splits ---
     train_loader, val_loader, train_eval_loader, split_dict = build_loaders(
-        args.data_dir, args.dataset, args.train_fraction, args.seed
+        args.data_dir,
+        args.dataset,
+        args.train_fraction,
+        args.seed,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
     )
     split_dir = args.splits_dir / args.dataset
     ensure_dir(split_dir)
     with open(split_dir / f"frac{args.train_fraction}_seed{args.seed}.json", "w") as f:
         json.dump(split_dict, f, indent=2)
 
+    # --- robust channels from MSD metadata (not from a single sample) ---
     from monai.apps import DecathlonDataset
 
     props = DecathlonDataset(
@@ -95,7 +105,7 @@ def run():
     in_ch = len(props.get("modality", {}) or {}) or 1
     out_ch = len(props.get("labels", {}) or {}) or 2
 
-    # --- model build + CT-SSL encoder init ---
+    # --- model & CT-SSL encoder init ---
     use_v2 = args.model == "swinv2"
     model = build_swin_unetr(in_ch=in_ch, out_ch=out_ch, use_v2=use_v2).to(device)
     loaded, total = load_ct_ssl_encoder(model)
