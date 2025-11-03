@@ -1,13 +1,12 @@
 import time
 import argparse
-from pathlib import Path
 from monai.networks.nets.swin_unetr import SwinUNETR
 from peft import LoraConfig, get_peft_model
 from load import load_ct_ssl_encoder
-from train import train, evaluate
-from monai.apps.datasets import DecathlonDataset
+from train import train
 from data import build_loaders, get_channels
 from typing import Sequence
+import torch
 
 MSD_TASKS: Sequence[str] = [
     "Task01_BrainTumour",
@@ -72,13 +71,11 @@ def run(
 
     peft_model.print_trainable_parameters()
 
-    peft_model.parameters()
-
     start = time.time()
     logs, best_state = train(
         model=model,
         loaders=(train_loader, val_loader, train_eval_loader),
-        device="cpu",
+        device="cuda" if torch.cuda.is_available() else "cpu",
         max_epochs=epochs,
         lr=lr,
         wd=wd,
