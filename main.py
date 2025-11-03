@@ -15,7 +15,7 @@ from medlora.utils import (
 )
 from medlora.data import build_loaders
 from medlora.models import build_swin_unetr, load_ct_ssl_encoder
-from medlora.lora import apply_lora_to_swin_encoder
+from medlora.lora import apply_lora_to_encoder
 from medlora.train import train
 
 
@@ -89,7 +89,7 @@ def run():
     with open(split_dir / f"frac{args.train_fraction}_seed{args.seed}.json", "w") as f:
         json.dump(split_dict, f, indent=2)
 
-    # --- robust channels from MSD metadata (not from a single sample) ---
+    # --- robust channels from MSD metadata ---
     from monai.apps import DecathlonDataset
 
     props = DecathlonDataset(
@@ -120,7 +120,7 @@ def run():
             f"{args.dataset}|{args.model}|fft|frac{args.train_fraction}|seed{args.seed}"
         )
     else:
-        model = apply_lora_to_swin_encoder(
+        model = apply_lora_to_encoder(
             model, r=args.lora_r, alpha=args.lora_alpha, dropout=args.lora_dropout
         )
         lr, wd = args.lr_lora, args.wd_lora

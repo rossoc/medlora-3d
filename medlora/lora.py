@@ -4,7 +4,7 @@ import math
 import torch
 import torch.nn as nn
 
-# We only target encoder Linear layers used in attention and MLP blocks.
+# Target only the Linear layers used in attention & MLP inside the Swin encoder
 TARGETS = ("qkv", "proj", "linear1", "linear2")
 
 
@@ -12,7 +12,7 @@ class LoRALinear(nn.Module):
     """
     Wrap an nn.Linear with a rank-r LoRA branch:
         y = W x + (alpha/r) * B(A x)
-    Base (W,b) are frozen; only A,B are trainable. Forward signature unchanged.
+    Base (W, b) are frozen; only A, B are trainable. Forward signature unchanged.
     """
 
     def __init__(
@@ -61,16 +61,20 @@ def _inject_lora_linear(
     return replaced
 
 
-def apply_lora_to_swin_encoder(model, r=8, alpha=16, dropout=0.0):
+def apply_lora_to_encoder(model, r=8, alpha=16, dropout=0.0):
     """
     Freeze everything; inject LoRA into encoder Linear layers (qkv/proj/linear1/linear2);
     then unfreeze decoder & seg head + LoRA A/B params.
+
+    This keeps comparisons fair:
+      • Full FT: encoder+decoder fully trainable.
+      • LoRA   : decoder+head trainable; encoder adapted via low-rank A/B only.
     """
     # 1) Freeze all parameters
     for p in model.parameters():
         p.requires_grad = False
 
-    # 2) Inject LoRA on encoder only
+    # 2) Inject LoRA into the Swin encoder only
     n_wrapped = _inject_lora_linear(
         model.swinViT, TARGETS, r=r, alpha=alpha, dropout=dropout
     )

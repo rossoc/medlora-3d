@@ -28,7 +28,6 @@ def evaluate(model, loader, loss_fn, device, roi):
         loss = loss_fn(logits, labels)
         losses.append(loss.item())
 
-        # Dice
         preds = torch.argmax(logits, dim=1, keepdim=True)
         num_classes = int(logits.shape[1])
         y_onehot = (
@@ -62,7 +61,7 @@ def train(
     wd=1e-4,
     early_stopping=True,
     patience=10,
-    min_epochs=30,
+    min_epochs=10,
     tag="run",
 ):
     train_loader, val_loader, train_eval_loader = loaders
@@ -74,11 +73,8 @@ def train(
     )
     scaler = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda"))
 
-    best_state, best_dice = None, -1.0
+    best_state, best_dice, best_counter = None, -1.0, 0
     tr_losses, va_losses, va_dices = [], [], []
-
-    # simple early stopper
-    best_counter = 0
 
     for epoch in range(1, max_epochs + 1):
         model.train()
@@ -92,13 +88,12 @@ def train(
             labels = batch["label"].to(device)
 
             optimizer.zero_grad(set_to_none=True)
-            # AMP (new API); use nullcontext on CPU
-            amp_ctx = (
+            ctx = (
                 torch.amp.autocast(device_type="cuda", dtype=torch.float16)
                 if device.type == "cuda"
                 else contextlib.nullcontext()
             )
-            with amp_ctx:
+            with ctx:
                 logits = model(images)
                 loss = loss_fn(logits, labels)
 
@@ -125,7 +120,6 @@ def train(
         if early_stopping and epoch >= min_epochs and best_counter >= patience:
             break
 
-    # generalization gap: train-eval (no aug) vs val
     tloss_eval, tdice_eval = evaluate(model, train_eval_loader, loss_fn, device, roi)
 
     if best_state is not None:

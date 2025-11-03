@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import numpy as np
+import torch  # <-- needed for pin_memory check
 from monai.apps import DecathlonDataset
 from monai.data import Dataset, DataLoader
 from monai.transforms import (
@@ -102,7 +103,7 @@ def build_loaders(
     data_dir: Path, task: str, fraction: int, seed: int, batch_size=2, num_workers=2
 ):
     all_items = load_decathlon_list(data_dir, task, download=True)
-    # fixed val split (seed=0) to keep "test" constant across runs; seed for fraction selection
+    # fixed val split (seed=0)
     train_pool, val_items = train_val_split(all_items, DEFAULT_VAL_FRAC, seed=0)
     train_items = take_fraction(train_pool, fraction, seed=seed)
 
