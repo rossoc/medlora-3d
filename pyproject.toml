@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "medlora"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "einops>=0.8.1",
+    "monai[nibabel]>=1.5.1",
+    "peft>=0.17.1",
+    "torch>=2.9.0",
+    "transformers>=4.57.1",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+

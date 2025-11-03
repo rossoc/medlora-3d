@@ -1,0 +1,5 @@
+einops>=0.8.1
+monai[nibabel]>=1.5.1
+peft>=0.17.1
+torch>=2.9.0
+transformers>=4.57.1
