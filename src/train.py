@@ -77,14 +77,8 @@ def train(
         for batch in pbar:
             images, labels = batch["image"].to(device), batch["label"].to(device)
             optimizer.zero_grad()
-            ctx = (
-                torch.autocast("cuda", dtype=torch.float16)
-                if device == "cuda"
-                else contextlib.nullcontext()
-            )
-            with ctx:
-                logits = model(images)
-                loss = loss_fn(logits, labels)
+            logits = model(images)
+            loss = loss_fn(logits, labels)
             loss.backward()
             optimizer.step()
             count += 1

@@ -68,8 +68,10 @@ def run(
     _, _ = load_ct_ssl_encoder(model)
 
     peft_model = get_peft_model(model, lora_config)  # type: ignore
-
     peft_model.print_trainable_parameters()
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    peft_model.to(device)
 
     start = time.time()
     logs, best_state = train(
